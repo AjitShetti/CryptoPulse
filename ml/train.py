@@ -7,7 +7,7 @@ import sys
 import os
 import numpy as np
 from sklearn.preprocessing import StandardScaler
-from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV
+from sklearn.model_selection import TimeSeriesSplit, RandomizedSearchCV, train_test_split
 from xgboost import XGBClassifier
 
 # Add project root to path
@@ -50,9 +50,10 @@ class ModelTrainer:
         3. Scale features
         4. Optionally tune hyperparameters with TimeSeriesSplit CV
         5. Train XGBClassifier with best params + early stopping
+           (uses a validation split carved from training data, not the test set)
         6. Feature selection pass (drop low-importance features)
         7. Retrain on selected features
-        8. Evaluate & save model
+        8. Evaluate on held-out test set & save model
         """
         print("\n📊 Loading and engineering features...")
         fe = FeatureEngineer()
@@ -69,6 +70,14 @@ class ModelTrainer:
         print("\n⚙️  Scaling features...")
         X_train_scaled = self.scaler.fit_transform(X_train)
         X_test_scaled = self.scaler.transform(X_test)
+
+        # Create a validation split from training data for early stopping
+        # (keeps test set strictly held-out for final evaluation)
+        X_tr_sub, X_val, y_tr_sub, y_val = train_test_split(
+            X_train_scaled, y_train,
+            test_size=0.15, random_state=42, shuffle=False,
+        )
+        print(f"   Train sub: {len(X_tr_sub)} rows | Validation: {len(X_val)} rows")
 
         # Class balance weight
         n_pos = int(y_train.sum())
@@ -103,16 +112,15 @@ class ModelTrainer:
             **best_params,
             scale_pos_weight=scale_pos_weight,
             random_state=42,
-            use_label_encoder=False,
             eval_metric="logloss",
             early_stopping_rounds=50,
             tree_method="hist",
         )
 
         self.model.fit(
-            X_train_scaled,
-            y_train,
-            eval_set=[(X_test_scaled, y_test)],
+            X_tr_sub,
+            y_tr_sub,
+            eval_set=[(X_val, y_val)],
             verbose=False,
         )
         print(f"   Best iteration: {self.model.best_iteration}")
@@ -132,28 +140,33 @@ class ModelTrainer:
             X_train_scaled = self.scaler.fit_transform(X_train_sel)
             X_test_scaled = self.scaler.transform(X_test_sel)
 
+            # Re-split train/val for early stopping
+            X_tr_sub, X_val, y_tr_sub, y_val = train_test_split(
+                X_train_scaled, y_train,
+                test_size=0.15, random_state=42, shuffle=False,
+            )
+
             # Retrain on selected features
             print("\n🤖 Retraining on selected features...")
             self.model = XGBClassifier(
                 **best_params,
                 scale_pos_weight=scale_pos_weight,
                 random_state=42,
-                use_label_encoder=False,
                 eval_metric="logloss",
                 early_stopping_rounds=50,
                 tree_method="hist",
             )
             self.model.fit(
-                X_train_scaled,
-                y_train,
-                eval_set=[(X_test_scaled, y_test)],
+                X_tr_sub,
+                y_tr_sub,
+                eval_set=[(X_val, y_val)],
                 verbose=False,
             )
             print(f"   Best iteration: {self.model.best_iteration}")
         else:
             print("   All features retained.")
 
-        # ── Evaluate ─────────────────────────────────────────────────────
+        # ── Evaluate on held-out test set ─────────────────────────────────
         print("\n📈 Evaluating model...")
         evaluator = ModelEvaluator()
         self.metrics = evaluator.evaluate(
@@ -187,7 +200,6 @@ class ModelTrainer:
         base_model = XGBClassifier(
             scale_pos_weight=scale_pos_weight,
             random_state=42,
-            use_label_encoder=False,
             eval_metric="logloss",
             tree_method="hist",
         )
@@ -216,6 +228,7 @@ class ModelTrainer:
     ):
         """
         Remove features below the given percentile of importance.
+        Falls back to keeping at least the top feature if all are uniform.
         Returns filtered X_train, X_test (unscaled), and selected feature names.
         """
         importances = self.model.feature_importances_
@@ -225,6 +238,17 @@ class ModelTrainer:
         selected_features = [
             f for f, keep in zip(self.feature_names, selected_mask) if keep
         ]
+
+        # Fallback: if no features selected (e.g. uniform importances),
+        # keep at least the top-k by importance
+        if not selected_features:
+            k = max(1, int(len(importances) * 0.1))
+            top_idx = np.argsort(importances)[-k:]
+            selected_features = [self.feature_names[i] for i in top_idx]
+            logging.warning(
+                f"Percentile threshold selected 0 features; "
+                f"falling back to top {k} by importance."
+            )
 
         X_train_sel = X_train_raw[selected_features]
         X_test_sel = X_test_raw[selected_features]

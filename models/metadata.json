@@ -1,0 +1,181 @@
+{
+  "trained_at": "2026-03-04T23:02:25.595233",
+  "feature_count": 73,
+  "feature_names": [
+    "open",
+    "high",
+    "low",
+    "close",
+    "volume",
+    "quote_volume",
+    "trades",
+    "hour_sin",
+    "hour_cos",
+    "sma_7",
+    "sma_25",
+    "sma_99",
+    "ema_7",
+    "ema_25",
+    "ema_50",
+    "macd",
+    "macd_signal",
+    "macd_diff",
+    "adx",
+    "adx_pos",
+    "adx_neg",
+    "rsi_14",
+    "rsi_7",
+    "stoch_k",
+    "stoch_d",
+    "williams_r",
+    "bb_upper",
+    "bb_middle",
+    "bb_lower",
+    "bb_width",
+    "atr_14",
+    "obv",
+    "price_change",
+    "price_change_3",
+    "price_change_7",
+    "price_change_14",
+    "high_low_ratio",
+    "close_open_ratio",
+    "upper_shadow",
+    "lower_shadow",
+    "body_ratio",
+    "volume_change",
+    "volume_sma_20",
+    "volume_ratio",
+    "return_lag_1",
+    "return_lag_2",
+    "return_lag_3",
+    "return_lag_5",
+    "return_lag_10",
+    "rsi_lag_1",
+    "macd_diff_lag_1",
+    "rsi_lag_2",
+    "macd_diff_lag_2",
+    "rsi_lag_3",
+    "rsi_change",
+    "macd_diff_change",
+    "volatility_5",
+    "volatility_10",
+    "volatility_20",
+    "mean_return_5",
+    "mean_return_10",
+    "mean_return_20",
+    "skew_20",
+    "kurt_20",
+    "high_20_ratio",
+    "low_20_ratio",
+    "high_50_ratio",
+    "low_50_ratio",
+    "vol_std_10",
+    "vol_mean_ratio_10",
+    "dist_from_sma25",
+    "dist_from_sma99",
+    "dist_from_bb_mid"
+  ],
+  "metrics": {
+    "accuracy": 0.5007112375533428,
+    "precision": 0.4947049924357035,
+    "recall": 0.9505813953488372,
+    "f1_score": 0.6507462686567164,
+    "classification_report": {
+      "DOWN": {
+        "precision": 0.5952380952380952,
+        "recall": 0.06963788300835655,
+        "f1-score": 0.12468827930174564,
+        "support": 359.0
+      },
+      "UP": {
+        "precision": 0.4947049924357035,
+        "recall": 0.9505813953488372,
+        "f1-score": 0.6507462686567164,
+        "support": 344.0
+      },
+      "accuracy": 0.5007112375533428,
+      "macro avg": {
+        "precision": 0.5449715438368994,
+        "recall": 0.5101096391785969,
+        "f1-score": 0.387717273979231,
+        "support": 703.0
+      },
+      "weighted avg": {
+        "precision": 0.5460440876079063,
+        "recall": 0.5007112375533428,
+        "f1-score": 0.38210499102025197,
+        "support": 703.0
+      }
+    },
+    "confusion_matrix": [
+      [
+        25,
+        334
+      ],
+      [
+        17,
+        327
+      ]
+    ],
+    "test_samples": 703,
+    "class_distribution": {
+      "DOWN": 359,
+      "UP": 344
+    },
+    "roc_auc": 0.523118157673123,
+    "top_features": [
+      {
+        "name": "stoch_k",
+        "importance": 0.026051856577396393
+      },
+      {
+        "name": "williams_r",
+        "importance": 0.02385062351822853
+      },
+      {
+        "name": "high",
+        "importance": 0.020002180710434914
+      },
+      {
+        "name": "ema_25",
+        "importance": 0.018257956951856613
+      },
+      {
+        "name": "open",
+        "importance": 0.017522195354104042
+      },
+      {
+        "name": "ema_7",
+        "importance": 0.017396170645952225
+      },
+      {
+        "name": "sma_7",
+        "importance": 0.01724919117987156
+      },
+      {
+        "name": "close_open_ratio",
+        "importance": 0.017133409157395363
+      },
+      {
+        "name": "lower_shadow",
+        "importance": 0.016401411965489388
+      },
+      {
+        "name": "low",
+        "importance": 0.01609870046377182
+      }
+    ],
+    "best_params": {
+      "subsample": 0.8,
+      "reg_lambda": 2.0,
+      "reg_alpha": 0.1,
+      "n_estimators": 300,
+      "min_child_weight": 5,
+      "max_depth": 7,
+      "learning_rate": 0.01,
+      "gamma": 0,
+      "colsample_bytree": 0.8
+    }
+  }
+}

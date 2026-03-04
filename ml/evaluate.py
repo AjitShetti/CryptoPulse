@@ -10,6 +10,7 @@ from sklearn.metrics import (
     f1_score,
     classification_report,
     confusion_matrix,
+    roc_auc_score,
 )
 from core.logger import logging
 
@@ -24,11 +25,17 @@ class ModelEvaluator:
         Run predictions on test set and compute metrics.
 
         Returns:
-            Dict with accuracy, precision, recall, f1_score,
+            Dict with accuracy, precision, recall, f1_score, roc_auc,
             classification_report, confusion_matrix, and feature_importances.
         """
         y_pred = model.predict(X_test)
-        y_prob = model.predict_proba(X_test)[:, 1] if hasattr(model, "predict_proba") else None
+
+        # Probability-based metric (ROC-AUC)
+        y_prob = None
+        if hasattr(model, "predict_proba"):
+            y_prob = model.predict_proba(X_test)[:, 1]
+        elif hasattr(model, "decision_function"):
+            y_prob = model.decision_function(X_test)
 
         metrics = {
             "accuracy": float(accuracy_score(y_test, y_pred)),
@@ -46,20 +53,37 @@ class ModelEvaluator:
             },
         }
 
-        # Feature importances
-        if hasattr(model, "feature_importances_") and feature_names:
+        # ROC-AUC (requires probability scores and both classes present)
+        if y_prob is not None and len(np.unique(y_test)) == 2:
+            try:
+                metrics["roc_auc"] = float(roc_auc_score(y_test, y_prob))
+            except ValueError:
+                logging.warning("Could not compute ROC-AUC score.")
+
+        # Feature importances — with length validation
+        if hasattr(model, "feature_importances_") and feature_names is not None:
             importances = model.feature_importances_
-            top_indices = np.argsort(importances)[::-1][:10]
-            metrics["top_features"] = [
-                {"name": feature_names[i], "importance": float(importances[i])}
-                for i in top_indices
-            ]
+            safe_len = min(len(feature_names), len(importances))
+            if safe_len > 0:
+                top_indices = np.argsort(importances[:safe_len])[::-1][:10]
+                metrics["top_features"] = [
+                    {"name": feature_names[i], "importance": float(importances[i])}
+                    for i in top_indices
+                    if i < safe_len
+                ]
+            else:
+                logging.warning(
+                    f"Feature name/importance length mismatch: "
+                    f"names={len(feature_names)}, importances={len(importances)}. "
+                    f"Skipping top_features."
+                )
 
         logging.info(
             f"Evaluation: acc={metrics['accuracy']:.4f}, "
             f"f1={metrics['f1_score']:.4f}, "
             f"precision={metrics['precision']:.4f}, "
             f"recall={metrics['recall']:.4f}"
+            + (f", roc_auc={metrics['roc_auc']:.4f}" if "roc_auc" in metrics else "")
         )
         return metrics
 
@@ -73,6 +97,8 @@ class ModelEvaluator:
         print(f"  Precision: {metrics['precision']:.4f}")
         print(f"  Recall:    {metrics['recall']:.4f}")
         print(f"  F1 Score:  {metrics['f1_score']:.4f}")
+        if "roc_auc" in metrics:
+            print(f"  ROC-AUC:   {metrics['roc_auc']:.4f}")
         print(f"  Test Size: {metrics['test_samples']} samples")
         print(f"  Classes:   DOWN={metrics['class_distribution']['DOWN']}, "
               f"UP={metrics['class_distribution']['UP']}")

@@ -1,7 +1,7 @@
 """
 CryptoPulse — Model Retraining
 Fetches fresh data, re-engineers features, retrains the model,
-and saves if performance improves.
+and always saves the latest model (latest data is more relevant).
 """
 import sys
 import os
@@ -23,7 +23,8 @@ class Retrainer:
     Orchestrates the retraining pipeline:
     1. Fetch latest data from Binance
     2. Retrain model on full dataset
-    3. Save only if metrics improve
+    3. Always save the retrained model (latest data is more relevant)
+    4. Log comparison against previous metrics
     """
 
     def __init__(self):
@@ -48,7 +49,11 @@ class Retrainer:
         session = get_session()
         try:
             inserted, skipped = bulk_upsert_candles(session, SYMBOL, candles)
+            session.commit()
             print(f"📡 Data refresh: {inserted} new candles, {skipped} existing")
+        except Exception:
+            session.rollback()
+            raise
         finally:
             session.close()
 
@@ -76,20 +81,25 @@ class Retrainer:
         new_metrics = trainer.train()
 
         # 4. Compare
-        if prev and prev.get("f1_score"):
-            old_f1 = prev["f1_score"]
-            new_f1 = new_metrics["f1_score"]
+        eps = 1e-6
+        old_f1 = prev.get("f1_score") if prev else None
+        new_f1 = new_metrics.get("f1_score")
+
+        if old_f1 is not None and new_f1 is not None:
             improvement = new_f1 - old_f1
 
-            if improvement > 0:
+            if improvement > eps:
                 print(f"\n✅ Model improved! F1: {old_f1:.4f} → {new_f1:.4f} (+{improvement:.4f})")
-            elif improvement == 0:
+            elif abs(improvement) <= eps:
                 print(f"\n⚖️  Model performance unchanged. F1: {new_f1:.4f}")
             else:
                 print(f"\n⚠️  Model regressed. F1: {old_f1:.4f} → {new_f1:.4f} ({improvement:.4f})")
                 print("   Note: Model was still saved (latest data is more relevant).")
+        elif new_f1 is not None:
+            print(f"\n🆕 First model trained! F1: {new_f1:.4f}")
         else:
-            print(f"\n🆕 First model trained! F1: {new_metrics['f1_score']:.4f}")
+            logging.warning("Could not retrieve F1 score from new metrics.")
+            print("\n⚠️  Training completed but F1 score not available in metrics.")
 
         print("\n🎉 Retraining complete!")
         return new_metrics
