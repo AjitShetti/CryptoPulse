@@ -2,7 +2,7 @@
 CryptoPulse — Database Layer
 SQLAlchemy ORM model for price history and DB session management.
 """
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     create_engine,
@@ -21,8 +21,10 @@ from core.logger import logging
 
 import os
 
-# Ensure data directory exists
-os.makedirs(os.path.dirname(DATABASE_PATH), exist_ok=True)
+# Ensure data directory exists (guard against empty dirname for bare filenames)
+_db_dir = os.path.dirname(DATABASE_PATH)
+if _db_dir:
+    os.makedirs(_db_dir, exist_ok=True)
 
 # ── Engine & Session ────────────────────────────────────────────────────
 engine = create_engine(DATABASE_URL, echo=False)
@@ -48,7 +50,7 @@ class PriceHistory(Base):
     close_time = Column(BigInteger, nullable=False)
     quote_volume = Column(Float, nullable=False)
     trades = Column(Integer, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("symbol", "open_time", name="uix_symbol_open_time"),
@@ -72,18 +74,30 @@ def get_session():
 def bulk_upsert_candles(session, symbol: str, candles: list[dict]):
     """
     Insert candles, skipping duplicates based on (symbol, open_time).
-    Each candle dict should have keys matching PriceHistory columns.
+    Uses a bulk existence check to avoid N+1 queries.
     """
+    if not candles:
+        return 0, 0
+
+    # Bulk existence check: get all open_times already in DB for this symbol
+    all_open_times = [c["open_time"] for c in candles]
+    existing_times = set()
+
+    # Query in batches of 500 to avoid SQLite variable limits
+    for i in range(0, len(all_open_times), 500):
+        batch = all_open_times[i : i + 500]
+        rows = (
+            session.query(PriceHistory.open_time)
+            .filter(PriceHistory.symbol == symbol, PriceHistory.open_time.in_(batch))
+            .all()
+        )
+        existing_times.update(r[0] for r in rows)
+
     inserted = 0
     skipped = 0
 
     for candle in candles:
-        exists = (
-            session.query(PriceHistory)
-            .filter_by(symbol=symbol, open_time=candle["open_time"])
-            .first()
-        )
-        if exists:
+        if candle["open_time"] in existing_times:
             skipped += 1
             continue
 

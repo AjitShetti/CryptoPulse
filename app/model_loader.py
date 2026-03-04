@@ -1,7 +1,8 @@
 """
 CryptoPulse — Model Loader
-Singleton loader for the trained XGBoost model, scaler, and feature names.
+Thread-safe singleton loader for the trained XGBoost model, scaler, and feature names.
 """
+import threading
 import numpy as np
 from pathlib import Path
 
@@ -14,28 +15,34 @@ class ModelLoader:
     """
     Loads and holds the trained model artifacts in memory.
     Provides a predict() method for inference.
+    Thread-safe singleton via double-checked locking.
     """
 
     _instance = None
+    _instance_lock = threading.Lock()
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            cls._instance._loaded = False
+            with cls._instance_lock:
+                if cls._instance is None:
+                    cls._instance = super().__new__(cls)
+                    cls._instance._loaded = False
+                    cls._instance._load_lock = threading.Lock()
         return cls._instance
 
     def load(self):
-        """Load model artifacts from disk."""
-        try:
-            self.model, self.scaler, self.feature_names, self.metadata = load_model(
-                MODELS_DIR
-            )
-            self._loaded = True
-            logging.info("Model loaded successfully into ModelLoader")
-        except Exception as e:
-            logging.error(f"Failed to load model: {e}")
-            self._loaded = False
-            raise
+        """Load model artifacts from disk (thread-safe)."""
+        with self._load_lock:
+            try:
+                self.model, self.scaler, self.feature_names, self.metadata = load_model(
+                    MODELS_DIR
+                )
+                self._loaded = True
+                logging.info("Model loaded successfully into ModelLoader")
+            except Exception as e:
+                self._loaded = False
+                logging.error(f"Failed to load model: {e}")
+                raise
 
     @property
     def is_loaded(self) -> bool:
@@ -50,9 +57,21 @@ class ModelLoader:
 
         Returns:
             Tuple of (prediction_label: "UP"/"DOWN", confidence: float).
+
+        Raises:
+            RuntimeError: If model is not loaded.
+            ValueError: If required features are missing.
         """
         if not self._loaded:
             raise RuntimeError("Model not loaded. Call load() first.")
+
+        # Check for missing features
+        missing = [name for name in self.feature_names if name not in features]
+        if missing:
+            logging.warning(
+                f"Missing {len(missing)} features (will default to 0): {missing[:10]}"
+                + ("..." if len(missing) > 10 else "")
+            )
 
         # Build feature array in correct order
         feature_array = np.array(

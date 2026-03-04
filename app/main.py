@@ -29,10 +29,11 @@ app = FastAPI(
 )
 
 # CORS for Streamlit dashboard
+# allow_credentials=False when using wildcard origins (per CORS spec)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -104,8 +105,8 @@ async def predict(request: PredictionRequest = PredictionRequest()):
         if features_df.empty:
             raise HTTPException(status_code=500, detail="Feature engineering produced no data")
 
-        # 4. Convert to dict for prediction
-        features_dict = features_df.iloc[0].to_dict()
+        # 4. Convert the latest row to dict for prediction
+        features_dict = features_df.iloc[-1].to_dict()
 
         # 5. Predict
         prediction, confidence = model_loader.predict(features_dict)
@@ -122,8 +123,8 @@ async def predict(request: PredictionRequest = PredictionRequest()):
     except HTTPException:
         raise
     except Exception as e:
-        logging.error(f"Prediction error: {e}")
-        raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
+        logging.exception("Prediction error")
+        raise HTTPException(status_code=500, detail="Prediction failed")
 
 
 # ── Run directly ─────────────────────────────────────────────────────────

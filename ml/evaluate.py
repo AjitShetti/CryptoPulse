@@ -33,9 +33,23 @@ class ModelEvaluator:
         # Probability-based metric (ROC-AUC)
         y_prob = None
         if hasattr(model, "predict_proba"):
-            y_prob = model.predict_proba(X_test)[:, 1]
-        elif hasattr(model, "decision_function"):
-            y_prob = model.decision_function(X_test)
+            try:
+                proba = model.predict_proba(X_test)
+                if proba.ndim == 2 and proba.shape[1] >= 2:
+                    y_prob = proba[:, 1]
+                elif proba.ndim == 2 and proba.shape[1] == 1:
+                    y_prob = proba[:, 0]
+                else:
+                    y_prob = proba
+            except Exception:
+                logging.warning("predict_proba failed; falling back to decision_function")
+                y_prob = None
+
+        if y_prob is None and hasattr(model, "decision_function"):
+            try:
+                y_prob = model.decision_function(X_test)
+            except Exception:
+                y_prob = None
 
         metrics = {
             "accuracy": float(accuracy_score(y_test, y_pred)),
@@ -63,6 +77,12 @@ class ModelEvaluator:
         # Feature importances — with length validation
         if hasattr(model, "feature_importances_") and feature_names is not None:
             importances = model.feature_importances_
+            if len(feature_names) != len(importances):
+                logging.warning(
+                    f"Feature name/importance length mismatch: "
+                    f"names={len(feature_names)}, importances={len(importances)}. "
+                    f"Truncating to shorter length."
+                )
             safe_len = min(len(feature_names), len(importances))
             if safe_len > 0:
                 top_indices = np.argsort(importances[:safe_len])[::-1][:10]
@@ -72,11 +92,7 @@ class ModelEvaluator:
                     if i < safe_len
                 ]
             else:
-                logging.warning(
-                    f"Feature name/importance length mismatch: "
-                    f"names={len(feature_names)}, importances={len(importances)}. "
-                    f"Skipping top_features."
-                )
+                logging.warning("No features available for importance ranking.")
 
         logging.info(
             f"Evaluation: acc={metrics['accuracy']:.4f}, "

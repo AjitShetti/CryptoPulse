@@ -9,10 +9,6 @@ data/cryptopulse.db
 # Models
 models/*.joblib
 models/metadata.json
-data/cryptopulse.db
-models/model.joblib
-models/scaler.joblib
-models/feature_names.joblib
 
 # C extensions
 *.so

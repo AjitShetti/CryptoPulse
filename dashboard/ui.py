@@ -20,6 +20,20 @@ from data.processing import FeatureEngineer
 from config.settings import API_BASE_URL, SYMBOL, INTERVAL, REFRESH_INTERVAL
 
 
+# ── Interval helper ──────────────────────────────────────────────────────
+INTERVAL_MINUTES = {
+    "1m": 1, "3m": 3, "5m": 5, "15m": 15, "30m": 30,
+    "1h": 60, "2h": 120, "4h": 240, "6h": 360, "8h": 480,
+    "12h": 720, "1d": 1440, "3d": 4320, "1w": 10080,
+}
+
+
+def candles_in_24h(interval: str) -> int:
+    """Return the number of candles that span 24 hours for the given interval."""
+    minutes = INTERVAL_MINUTES.get(interval, 60)
+    return max(1, int(24 * 60 / minutes))
+
+
 # ── Page Config ──────────────────────────────────────────────────────────
 st.set_page_config(
     page_title="CryptoPulse Dashboard",
@@ -213,9 +227,12 @@ current_price = df["close"].iloc[-1]
 prev_price = df["close"].iloc[-2]
 price_change = current_price - prev_price
 price_change_pct = (price_change / prev_price) * 100
-volume_24h = df["volume"].tail(24).sum() if len(df) >= 24 else df["volume"].sum()
-high_24h = df["high"].tail(24).max() if len(df) >= 24 else df["high"].max()
-low_24h = df["low"].tail(24).min() if len(df) >= 24 else df["low"].min()
+
+# Use interval-aware candle count for 24h aggregates
+n_24h = candles_in_24h(interval)
+volume_24h = df["volume"].tail(n_24h).sum() if len(df) >= n_24h else df["volume"].sum()
+high_24h = df["high"].tail(n_24h).max() if len(df) >= n_24h else df["high"].max()
+low_24h = df["low"].tail(n_24h).min() if len(df) >= n_24h else df["low"].min()
 
 col1, col2, col3, col4, col5 = st.columns(5)
 with col1:

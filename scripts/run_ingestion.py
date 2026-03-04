@@ -57,7 +57,7 @@ def main():
 
     except Exception as e:
         print(f"\n❌ Ingestion failed: {e}")
-        logging.error(f"Ingestion failed: {e}")
+        logging.exception("Ingestion failed")
         sys.exit(1)
 
 

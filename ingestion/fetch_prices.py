@@ -53,9 +53,9 @@ class BinanceFetcher:
                 "interval": self.interval,
                 "limit": min(limit, 1000),
             }
-            if start_time:
+            if start_time is not None:
                 params["startTime"] = start_time
-            if end_time:
+            if end_time is not None:
                 params["endTime"] = end_time
 
             url = f"{self.base_url}{self.KLINES_ENDPOINT}"
@@ -105,12 +105,12 @@ class BinanceFetcher:
 
         return all_candles
 
-    def fetch_latest_candle(self) -> dict:
-        """Fetch the most recent completed candle."""
+    def fetch_latest_candle(self) -> Optional[dict]:
+        """Fetch the most recent completed candle. Returns None if unavailable."""
         candles = self.fetch_klines(limit=2)
         if len(candles) >= 2:
             return candles[-2]  # second-to-last is the latest COMPLETED candle
-        return candles[0] if candles else {}
+        return candles[0] if candles else None
 
     @staticmethod
     def _parse_klines(raw_data: list) -> list[dict]:

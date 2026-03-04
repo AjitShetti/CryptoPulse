@@ -116,8 +116,8 @@ class FeatureEngineer:
         df["price_change_3"] = close.pct_change(periods=3)
         df["price_change_7"] = close.pct_change(periods=7)
         df["price_change_14"] = close.pct_change(periods=14)
-        df["high_low_ratio"] = high / low
-        df["close_open_ratio"] = close / open_
+        df["high_low_ratio"] = high / (low + 1e-10)
+        df["close_open_ratio"] = close / (open_ + 1e-10)
         df["upper_shadow"] = (high - np.maximum(close, open_)) / (high - low + 1e-10)
         df["lower_shadow"] = (np.minimum(close, open_) - low) / (high - low + 1e-10)
         df["body_ratio"] = np.abs(close - open_) / (high - low + 1e-10)
@@ -295,11 +295,37 @@ class FeatureEngineer:
         return X_train, X_test, y_train, y_test
 
 
+# Minimum candles required for indicator warmup (SMA-99 needs at least 99 rows)
+MIN_CANDLES = 100
+
+REQUIRED_CANDLE_KEYS = {"open", "high", "low", "close", "volume", "open_time"}
+
+
 def prepare_features_from_candles(candles: list[dict]) -> pd.DataFrame:
     """
     Prepare features from a list of candle dicts (for prediction-time use).
     Returns a single-row DataFrame of the latest candle's features.
+
+    Raises:
+        ValueError: If candles are missing required keys or count is insufficient.
     """
+    if not candles:
+        raise ValueError("No candles provided.")
+
+    # Validate required keys on first candle
+    sample_keys = set(candles[0].keys())
+    missing_keys = REQUIRED_CANDLE_KEYS - sample_keys
+    if missing_keys:
+        raise ValueError(
+            f"Candle dicts are missing required keys: {sorted(missing_keys)}"
+        )
+
+    if len(candles) < MIN_CANDLES:
+        raise ValueError(
+            f"Need at least {MIN_CANDLES} candles for indicator warmup, "
+            f"got {len(candles)}."
+        )
+
     df = pd.DataFrame(candles)
     fe = FeatureEngineer()
 
